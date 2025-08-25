@@ -15,40 +15,36 @@
 </head>
 <body>
   <h1>Cloudflare CORS Proxy Demo</h1>
-  <p>Worker：<code>https://cors-proxy.s01yg3642.workers.dev/</code></p>
+  <p>Worker：<code id="wk"></code></p>
 
   <div class="row">
-    <input id="api" type="text" placeholder="輸入任意 API URL（僅限白名單網域）" value="https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX" />
+    <input id="api" type="text" placeholder="輸入任意 API URL（需在白名單）" value="https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX" />
     <button id="go">Fetch</button>
     <button id="twse">TWSE：MI_INDEX</button>
     <button id="tpex">TPEx：簡單測試</button>
   </div>
 
-  <small>提示：這個 Demo 直接呼叫你的 Worker → 自動帶上 ?url= 編碼參數。回應顯示於下方。</small>
+  <small>這個頁面會經由你的 Worker 加上 ?url= 轉發，解決 CORS。</small>
 
   <h3>Response</h3>
   <pre id="out">// 等待請求中…</pre>
 
   <script type="module">
+    // ❶ 把這行改成你的 Worker 網址
     const WORKER = "https://cors-proxy.s01yg3642.workers.dev/";
 
-    function proxy(u) {
-      return WORKER + "?url=" + encodeURIComponent(u);
-    }
+    document.getElementById('wk').textContent = WORKER;
+
+    const toProxy = (u) => WORKER + "?url=" + encodeURIComponent(u);
 
     async function run(url) {
       const out = document.getElementById('out');
       out.textContent = "// Fetching...\n" + url;
       try {
-        const res = await fetch(proxy(url));
+        const res = await fetch(toProxy(url));
         const ct = res.headers.get('content-type') || "";
-        let body;
-        if (ct.includes("application/json")) {
-          const data = await res.json();
-          body = JSON.stringify(data, null, 2);
-        } else {
-          body = await res.text();
-        }
+        let body = ct.includes("application/json") ? JSON.stringify(await res.json(), null, 2)
+                                                   : await res.text();
         out.textContent = [
           `HTTP/1.1 ${res.status}`,
           `content-type: ${ct}`,
@@ -56,25 +52,15 @@
           "",
           body
         ].join("\n");
-      } catch (err) {
-        out.textContent = "Error: " + err.message;
+      } catch (e) {
+        out.textContent = "Error: " + e.message;
       }
     }
 
-    document.getElementById('go').addEventListener('click', () => {
-      const u = document.getElementById('api').value.trim();
-      if (u) run(u);
-    });
+    document.getElementById('go').onclick   = () => run(document.getElementById('api').value.trim());
+    document.getElementById('twse').onclick = () => run("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX");
+    document.getElementById('tpex').onclick = () => run("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio");
 
-    document.getElementById('twse').addEventListener('click', () => {
-      run("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX");
-    });
-
-    document.getElementById('tpex').addEventListener('click', () => {
-      run("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio");
-    });
-
-    // 自動跑一次
     run(document.getElementById('api').value);
   </script>
 </body>
