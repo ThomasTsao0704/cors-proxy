@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cloudflare CORS Proxy Demo</title>
+  <title>Cloudflare CORS Proxy Demo (Single-file)</title>
   <style>
     body {
       font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans TC', Arial, sans-serif;
@@ -43,7 +43,7 @@
 </head>
 
 <body>
-  <h1>Cloudflare CORS Proxy Demo</h1>
+  <h1>Cloudflare CORS Proxy Demo (Single-file)</h1>
   <p>Worker：<code id="wk"></code></p>
 
   <div class="row">
@@ -54,25 +54,26 @@
     <button id="tpex">TPEx：簡單測試</button>
   </div>
 
-  <small>這個頁面透過 <code>apiClient.js</code> 走你的 Worker 代理並處理 CORS。</small>
+  <small>本頁為單檔版，內建最小 client，避免相對路徑/快取問題。</small>
 
   <h3>Response</h3>
   <pre id="out">// 等待請求中…</pre>
 
   <script type="module">
-    // 使用封裝好的客戶端，不再手動組 ?url=
-    import { get } from './apiClient.js';
-
-    // 僅用於頁面顯示；實際請求端點以 apiClient.js 內的設定為準
     const WORKER = "https://cors-proxy.s01yg3642.workers.dev/";
     document.getElementById('wk').textContent = WORKER;
 
-    async function run(keyOrUrl) {
+    const toProxy = (u) => WORKER + "?url=" + encodeURIComponent(u);
+
+    async function run(url) {
       const out = document.getElementById('out');
-      out.textContent = "// Fetching...\n" + keyOrUrl;
+      out.textContent = "// Fetching...\n" + url;
       try {
-        const data = await get(keyOrUrl); // 自動經由 Worker 代理
-        out.textContent = JSON.stringify(data, null, 2);
+        const res = await fetch(toProxy(url));
+        const ct = res.headers.get('content-type') || "";
+        const body = ct.includes("application/json") ? JSON.stringify(await res.json(), null, 2)
+          : await res.text();
+        out.textContent = body;
       } catch (e) {
         out.textContent = "Error: " + e.message;
       }
@@ -82,7 +83,6 @@
     document.getElementById('twse').onclick = () => run('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX');
     document.getElementById('tpex').onclick = () => run('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio');
 
-    // 預設自動跑一次
     run(document.getElementById('api').value);
   </script>
 </body>
