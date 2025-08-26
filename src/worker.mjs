@@ -4,10 +4,10 @@ export default {
     const target = url.searchParams.get('url');
     if (!target) return new Response('missing ?url=', { status: 400 });
 
-    // ==== Auto-generated whitelist from CSV ====
+    // Whitelist (add hosts here as needed)
     const allowedHosts = new Set([
       'openapi.twse.com.tw',
-      'www.tpex.org.tw'
+      'www.tpex.org.tw',
     ]);
 
     let parsedTarget;
@@ -21,9 +21,7 @@ export default {
       return new Response('forbidden host', { status: 403 });
     }
 
-    if (!['GET','HEAD','OPTIONS'].includes(req.method)) {
-      return new Response('method not allowed', { status: 405 });
-    }
+    // CORS preflight
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -34,20 +32,43 @@ export default {
         }
       });
     }
+    if (!['GET','HEAD'].includes(req.method)) {
+      return new Response('method not allowed', { status: 405 });
+    }
 
     const upstreamResp = await fetch(parsedTarget.toString(), {
       method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
     });
 
     const headers = new Headers(upstreamResp.headers);
+
+    // --- CORS ---
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Access-Control-Expose-Headers', headers.get('Access-Control-Expose-Headers') ?? '*');
+
+    // --- Avoid cookie set in cross-origin fetches ---
     headers.delete('set-cookie');
 
-    return new Response(await upstreamResp.arrayBuffer(), {
+    // --- Force inline display for JSON or when upstream asked for attachment ---
+    const ct = (headers.get('content-type') || '').toLowerCase();
+    const cd = (headers.get('content-disposition') || '').toLowerCase();
+
+    // If upstream tries to download, change to inline
+    if (cd.includes('attachment')) {
+      headers.set('content-disposition', 'inline');
+    }
+
+    // If content-type looks like JSON (or missing but URL ends with .json), set JSON CT and inline
+    const isLikelyJSON = ct.includes('application/json') || /\.json(\?|$)/i.test(parsedTarget.pathname);
+    if (isLikelyJSON) {
+      headers.set('content-type', 'application/json; charset=utf-8');
+      headers.set('content-disposition', 'inline');
+      headers.set('X-Content-Type-Options', 'nosniff');
+    }
+
+    const body = await upstreamResp.arrayBuffer();
+    return new Response(body, {
       status: upstreamResp.status,
       headers,
     });
