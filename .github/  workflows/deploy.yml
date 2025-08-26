@@ -1,0 +1,19 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [ main ]   # 只有 push 到 main 才會觸發
+  workflow_dispatch:     # 允許你在 GitHub 網頁上手動觸發
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy
